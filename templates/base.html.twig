@@ -12,6 +12,21 @@
         {% endblock %}
     </head>
     <body>
+        <header>
+            <nav style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: #f8f9fa;">
+                <a href="/" style="font-weight: bold; font-size: 1.2rem;">Accueil</a>
+                <a href="{{ path('product_index') }}" style="margin-left: 2rem;">Boutique</a>
+                <a href="{{ path('app_article_index') }}" style="margin-left: 2rem;">Blog</a>
+                <div style="margin-left: auto;">
+                    <a href="{{ path('order_index') }}" style="position: relative;">
+                        🛒 Panier
+                        <span id="cart-count" style="background: #007bff; color: #fff; border-radius: 50%; padding: 0.2em 0.6em; font-size: 0.9em; margin-left: 0.3em;">
+                            {{ cartCount is defined ? cartCount : 0 }}
+                        </span>
+                    </a>
+                </div>
+            </nav>
+        </header>
         {% block body %}{% endblock %}
     </body>
 </html>

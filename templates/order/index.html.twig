@@ -1,0 +1,50 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Votre commande{% endblock %}
+
+{% block body %}
+<h1>Votre commande</h1>
+{% if products|length == 0 %}
+    <p>Votre panier est vide.</p>
+{% else %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Produit</th>
+                <th>Référence</th>
+                <th>Prix unitaire</th>
+                <th>Quantité</th>
+                <th>Sous-total</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in products %}
+                <tr>
+                    <td>{{ item.product.title }}</td>
+                    <td>{{ item.product.reference }}</td>
+                    <td>{{ item.product.price }} €</td>
+                    <td>
+                        <form method="post" action="{{ path('order_update_quantity', {id: item.product.id}) }}" style="display:inline-flex; align-items:center;">
+                            <input type="number" name="quantity" value="{{ item.quantity }}" min="1" style="width:60px; margin-right:5px;">
+                            <button type="submit" class="btn btn-sm btn-secondary">Modifier</button>
+                        </form>
+                    </td>
+                    <td>{{ item.subtotal }} €</td>
+                    <td>
+                        <form method="post" action="{{ path('order_remove_item', {id: item.product.id}) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Supprimer cet article ?');">Supprimer</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <th colspan="4" style="text-align:right;">Total :</th>
+                <th colspan="2">{{ total }} €</th>
+            </tr>
+        </tfoot>
+    </table>
+{% endif %}
+{% endblock %}
