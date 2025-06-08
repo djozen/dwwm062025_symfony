@@ -23,11 +23,16 @@ class ProductController extends AbstractController
         ]);
     }
 
-    #[Route('/boutique/add/{id}', name: 'product_add_cart')]
-    public function addToCart(Product $product, CartService $cartService, Request $request): RedirectResponse
+    #[Route('/boutique/add/{id}', name: 'product_add_cart', methods: ['POST'])]
+    public function addToCart(Product $product, CartService $cartService, Request $request): Response
     {
         $quantity = $request->query->getInt('qty', 1);
         $cartService->add($product->getId(), $quantity);
+        if ($request->isXmlHttpRequest()) {
+            return $this->json([
+                'cartCount' => $cartService->getTotalQuantity()
+            ]);
+        }
         return $this->redirectToRoute('product_index');
     }
 }

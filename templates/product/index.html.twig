@@ -19,7 +19,7 @@
                     <p class="card-text">{{ product.description }}</p>
                     <div class="mt-auto">
                         <p class="fw-bold text-success mb-2">{{ product.price }} €</p>
-                        <a href="{{ path('product_add_cart', {id: product.id}) }}" class="btn btn-outline-primary w-100">Ajouter au panier</a>
+                        <button class="btn btn-outline-primary w-100 add-to-cart-btn" data-url="{{ path('product_add_cart', {id: product.id}) }}">Ajouter au panier</button>
                     </div>
                 </div>
             </div>
