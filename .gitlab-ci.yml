@@ -1,0 +1,60 @@
+stages:
+  - test
+  - deploy
+
+test:
+  stage: test
+  script:
+    - vendor/bin/phpunit
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+    paths:
+      - var/log/
+      - var/cache/
+
+.deploy_dev:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375/
+    DOCKER_TLS_CERTDIR: ""
+    APP_ENV: "dev"
+    DATABASE_URL: "$DEV_DATABASE_URL"
+  script:
+    - echo "Building Docker image for DEV..."
+    - docker build --build-arg APP_ENV=$APP_ENV --build-arg DATABASE_URL=$DATABASE_URL -t myapp-dev .
+    # Example: push to registry or deploy
+    # - docker push registry.example.com/myapp-dev:latest
+    # - ssh user@dev-server 'docker pull registry.example.com/myapp-dev:latest && docker-compose up -d'
+  only:
+    - develop
+
+deploy_dev:
+  extends: .deploy_dev
+
+.deploy_prod:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375/
+    DOCKER_TLS_CERTDIR: ""
+    APP_ENV: "prod"
+    DATABASE_URL: "$PROD_DATABASE_URL"
+  script:
+    - echo "Building Docker image for PROD..."
+    - docker build --build-arg APP_ENV=$APP_ENV --build-arg DATABASE_URL=$DATABASE_URL -t myapp-prod .
+    # Example: push to registry or deploy
+    # - docker push registry.example.com/myapp-prod:latest
+    # - ssh user@prod-server 'docker pull registry.example.com/myapp-prod:latest && docker-compose up -d'
+  only:
+    - main
+    - master
+
+deploy_prod:
+  extends: .deploy_prod
