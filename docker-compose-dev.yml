@@ -1,0 +1,61 @@
+
+services:
+
+  php:
+      container_name: php-dev
+      build:
+          context: .
+          dockerfile: DockerfileDev
+      ports:
+        - "8080:80"
+      environment:
+            APP_ENV: dev
+            DATABASE_URL: "mysql://devops_demo:devops_demo@db:3306/devops_demo"  
+      volumes:
+            - './:/var/www/html'
+            - './.docker/vhost.conf:/etc/apache2/sites-available/000-default.conf'
+            - './.docker/entrypoint.sh:/usr/local/bin/entrypoint.sh'
+      entrypoint: ["/usr/local/bin/entrypoint.sh"]
+      depends_on:
+            - db
+  
+  db:
+    image: mariadb:11.3.2
+    container_name: mariadb
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=devops_demo
+      - MYSQL_USER=devops_demo
+      - MYSQL_PASSWORD=devops_demo
+    ports:
+      - "3306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+
+  phpmyadmin:
+      image: phpmyadmin:latest
+      container_name: phpmyadmin
+      environment:
+        - PMA_HOST=db
+      ports:
+        - "8081:80"
+      depends_on:
+        - db
+
+  maildev:
+    image: maildev/maildev
+    command: bin/maildev --web 1080 --smtp 1025 --hide-extensions STARTTLS
+    environment:
+      - TZ=Europe/Paris
+      - MAILDEV_WEB_PORT=1080
+      - MAILDEV_SMTP_PORT=1025
+    ports:
+      - "1080:1080"
+      - "1025:1025"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+
+volumes:
+  db-data:

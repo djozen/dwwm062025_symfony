@@ -1,0 +1,102 @@
+# Dockerfile for a Symfony application with Apache, PHP, Composer, and Node.js
+FROM ubuntu:24.04
+
+# Install composer
+ARG COMPOSER_VERSION="2.8.8"
+ADD --chmod=755 https://getcomposer.org/download/${COMPOSER_VERSION}/composer.phar /usr/local/bin/composer
+
+# Set DEBIAN_FRONTEND to noninteractive to avoid prompts during apt-get install
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install base dependencies, Apache, PHP, and PHP extensions in a single RUN command
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    apache2 libapache2-mod-fcgid \
+    php php-fpm \
+    libicu-dev libzip-dev libpng-dev git unzip \
+    php-cli php-mbstring php-xml php-curl php-zip php-gd php-intl php-mysql && \
+    # Clean up apt cache to reduce image size
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Config Apache
+COPY docker/vhost.conf /etc/apache2/sites-available/000-default.conf
+RUN a2enmod rewrite headers actions fcgid alias proxy_fcgi
+
+# Set APP_ENV - default to dev, can be overridden at build time
+ARG APP_ENV=dev
+ARG DATABASE_URL_BUILD_ARG # Define new build argument for DATABASE_URL
+ENV APP_ENV=${APP_ENV}
+
+WORKDIR /var/www/html
+
+# Copy composer files and install dependencies first to leverage Docker cache
+COPY composer.json composer.lock symfony.lock ./
+# Install symfony/apache-pack first if it's always needed
+RUN composer require symfony/apache-pack --prefer-dist --no-scripts --no-progress --no-interaction
+RUN composer install --prefer-dist --no-scripts --no-progress --no-interaction \
+    # Use --no-dev and --optimize-autoloader for production builds
+    # ${APP_ENV_ARGS} will be empty for dev, and "--no-dev --optimize-autoloader" for prod
+    $(if [ "$APP_ENV" = "prod" ]; then echo "--no-dev --optimize-autoloader"; fi)
+
+# Copy the rest of the application code
+COPY . .
+
+# Create necessary directories and set permissions
+RUN mkdir -p /var/www/html/var/log/${APP_ENV} && \
+    mkdir -p /var/www/html/var/cache/${APP_ENV} && \
+    mkdir -p /var/www/html/var/sessions/${APP_ENV} && \
+    mkdir -p /var/www/html/var/tmp/${APP_ENV} && \
+    mkdir -p /var/www/html/public/uploads && \
+    chown -R www-data:www-data /var/www/html/public/uploads && \
+    chmod -R 775 /var/www/html/public/uploads
+
+# Configure .env file based on APP_ENV and DATABASE_URL_BUILD_ARG
+# This replaces the previous block for copying .env files
+RUN echo "Configuring .env file for APP_ENV=${APP_ENV}..." && \
+    # Try to copy the environment-specific .env file (e.g., .env.dev, .env.prod, .env.staging)
+    if [ -f "./docker/.env.${APP_ENV}" ]; then \
+        echo "Using ./docker/.env.${APP_ENV} as base for .env" && \
+        cp "./docker/.env.${APP_ENV}" .env; \
+    # Fallback to a generic .env file if the specific one doesn't exist
+    elif [ -f "./docker/.env" ]; then \
+        echo "Using ./docker/.env as base for .env (fallback, as ./docker/.env.${APP_ENV} was not found)" && \
+        cp ./docker/.env .env; \
+    # If no .env file is found in docker/, create an empty one
+    else \
+        echo "Warning: No base .env file found in docker/ (neither ./docker/.env.${APP_ENV} nor ./docker/.env). Creating an empty .env file." && \
+        touch .env; \
+    fi
+
+
+RUN echo "Ensuring APP_ENV=${APP_ENV} is set in .env" && \
+    sed -i '/^#*APP_ENV=.*/d' .env && \
+    echo "APP_ENV=${APP_ENV}" >> .env
+
+RUN if [ -n "${DATABASE_URL_BUILD_ARG}" ]; then \
+    echo "Setting DATABASE_URL from build argument directly in ./docker/.env.${APP_ENV}: ${DATABASE_URL_BUILD_ARG}" && \
+    # This action modifies the source .env template.
+    # Assumes ./docker/.env.${APP_ENV} exists if this path is taken.
+    # The .env file in the WORKDIR would need to be updated from this modified source.
+    sed -i '/^#*DATABASE_URL=.*/d' "./docker/.env.${APP_ENV}" && \
+    echo "DATABASE_URL=\"${DATABASE_URL_BUILD_ARG}\"" >> "./docker/.env.${APP_ENV}"; \
+    else \
+    # If DATABASE_URL_BUILD_ARG is not provided, this block is skipped.
+    # The .env file will use the DATABASE_URL from its original source.
+    echo "DATABASE_URL_BUILD_ARG not provided. The DATABASE_URL from the .env file (which was sourced from ./docker/.env.${APP_ENV} or other template) will be used."; \
+    fi
+
+# Run Symfony post-install commands
+RUN composer recipes:install --no-interaction
+RUN bin/console assets:install --symlink --relative --no-debug
+RUN bin/console cache:clear --no-debug $(if [ "$APP_ENV" = "prod" ]; then echo "--no-warmup"; else echo "--warmup"; fi)
+
+# Set permissions for var directory
+RUN chmod -R 775 /var/www/html/var && \
+    chown -R www-data:www-data /var/www/html/var
+
+EXPOSE 80
+
+COPY docker/entrypoint.sh /scripts/entrypoint.sh
+RUN chmod +x /scripts/entrypoint.sh
+ENTRYPOINT ["/scripts/entrypoint.sh"]

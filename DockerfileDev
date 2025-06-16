@@ -1,0 +1,35 @@
+# Dockerfile for a Symfony application with Apache, PHP, Composer, and Node.js
+FROM ubuntu:24.04
+
+# Install composer
+ARG COMPOSER_VERSION="2.8.8"
+ADD --chmod=0755 https://getcomposer.org/download/${COMPOSER_VERSION}/composer.phar /usr/local/bin/composer
+
+# Set DEBIAN_FRONTEND to noninteractive to avoid prompts during apt-get install
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies and Apache
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    apache2 libapache2-mod-fcgid \
+    php php-fpm \
+    libicu-dev libzip-dev libpng-dev git unzip \
+    php-cli php-mbstring php-xml php-curl php-zip php-gd php-intl php-mysql php-pear \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG APP_ENV=dev
+ENV APP_ENV=${APP_ENV}
+
+# Installing external additional PHP modules only in dev environment
+RUN if [ "$APP_ENV" = "dev" ]; then \
+    apt-get update && \
+    apt-get install -y php-xdebug; \
+    echo "xdebug.mode=debug" >> /etc/php/8.3/mods-available/xdebug.ini && \
+    echo "xdebug.client_host=host.docker.internal" >> /etc/php/8.3/mods-available/xdebug.ini; \
+fi
+
+# Config Apache
+RUN a2enmod rewrite headers actions fcgid alias proxy_fcgi
+
+EXPOSE 80
+ 
